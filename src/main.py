@@ -1,16 +1,19 @@
-import pandas as pd
-from src.data_processor import AadhaarDataProcessor
 import os
 import sys
 
+import pandas as pd
+
+from src.data_processor import AadhaarDataProcessor
+
 def main():
     api_key = os.environ.get('DATA_GOV_IN_API_KEY')
+    use_local_enrol = True
+    use_update_api = bool(api_key)
+
     if not api_key:
-        print("Error: DATA_GOV_IN_API_KEY environment variable not set.")
-        print("Please set it with: export DATA_GOV_IN_API_KEY='your_api_key'")
-        # Fallback for demo purposes if user forgets, but warn heavily
-        # In a real scenario, we would exit. Here I will exit to be safe.
-        sys.exit(1)
+        print("DATA_GOV_IN_API_KEY not set. Using local enrolment CSVs and skipping update API calls.")
+        # Empty string is fine because we avoid API usage when key is missing
+        api_key = ""
 
     processor = AadhaarDataProcessor(api_key=api_key)
 
@@ -19,8 +22,13 @@ def main():
     # 1. Fetch Data
     limit = 5000
 
-    enrol_df = processor.get_enrolment_data(limit=limit)
-    update_df = processor.get_update_data(limit=limit)
+    enrol_df = processor.get_enrolment_data(
+        limit=limit,
+        use_local_csv=use_local_enrol,
+        csv_folder=os.path.join(os.path.dirname(__file__), "api_csv"),
+    )
+
+    update_df = processor.get_update_data(limit=limit) if use_update_api else pd.DataFrame()
 
     if enrol_df.empty and update_df.empty:
         print("No data fetched. Exiting.")
@@ -33,11 +41,14 @@ def main():
 
     # 3. Merge Data
     print("Merging datasets...")
-    try:
-        merged_df = processor.merge_datasets(enrol_clean, update_clean)
-    except ValueError as e:
-        print(f"Merge failed: {e}")
-        return
+    if update_clean.empty:
+        merged_df = enrol_clean.copy()
+    else:
+        try:
+            merged_df = processor.merge_datasets(enrol_clean, update_clean)
+        except ValueError as e:
+            print(f"Merge failed: {e}")
+            return
 
     # 4. Preprocess / Aggregation
     print("Aggregating data...")

@@ -1,3 +1,5 @@
+import glob
+import os
 import pandas as pd
 import requests
 import time
@@ -32,7 +34,43 @@ class AadhaarDataProcessor:
             print(f"Error fetching data from {resource_id}: {e}")
             return []
 
-    def get_enrolment_data(self, limit: int = 1000) -> pd.DataFrame:
+    def _load_enrolment_from_csv(self, folder_path: Optional[str] = None) -> pd.DataFrame:
+        """
+        Loads and concatenates enrolment CSV files from the given folder.
+        """
+        base_folder = folder_path or os.path.join(os.path.dirname(__file__), "api_csv")
+        pattern = os.path.join(base_folder, "api_data_aadhar_enrolment_*.csv")
+
+        csv_files = sorted(glob.glob(pattern))
+        if not csv_files:
+            print(f"No CSV files found at {pattern}")
+            return pd.DataFrame()
+
+        frames = []
+        for file_path in csv_files:
+            try:
+                frames.append(pd.read_csv(file_path))
+            except Exception as exc:  # pandas can raise many errors depending on file issues
+                print(f"Error reading {file_path}: {exc}")
+
+        if not frames:
+            return pd.DataFrame()
+
+        return pd.concat(frames, ignore_index=True)
+
+    def get_enrolment_data(self, limit: int = 1000, use_local_csv: bool = True, csv_folder: Optional[str] = None) -> pd.DataFrame:
+        """
+        Retrieves enrolment data.
+
+        By default, uses local CSVs under src/api_csv to avoid API calls.
+        Set use_local_csv=False to fall back to the remote API.
+        """
+        if use_local_csv:
+            df = self._load_enrolment_from_csv(folder_path=csv_folder)
+            if df.empty:
+                print("No local enrolment data loaded.")
+            return df
+
         print(f"Fetching enrolment data (limit={limit})...")
         records = self.fetch_data(self.enrolment_resource_id, limit=limit)
         if not records:
