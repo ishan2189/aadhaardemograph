@@ -1,6 +1,5 @@
 a.exe
 two_sum.c
 venv
-*.csv
 __pycache__/
 *.pyc
